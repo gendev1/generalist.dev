@@ -126,7 +126,9 @@ function mdToContentState(md) {
       i++;
       while (i < lines.length && !lines[i].startsWith("```"))
         code.push(lines[i++]);
-      blocks.push({ text: code.join("\n"), type: "code-block" });
+      // X's Articles enum has no code type (only unstyled/header-*/list/
+      // blockquote/atomic) — blockquote is the closest visual offset
+      blocks.push({ text: code.join("\n"), type: "blockquote" });
       continue;
     }
     const heading = line.match(/^(#{1,6}) (.*)/);
