@@ -1,0 +1,51 @@
+name: syndicate
+
+on:
+  push:
+    branches: [main]
+    paths: ["content/blog/**.md"]
+
+jobs:
+  crosspost:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: find newly added posts
+        id: new
+        run: |
+          NEW=$(git diff --name-only --diff-filter=A ${{ github.event.before }} ${{ github.sha }} -- 'content/blog/*.md' | tr '\n' ' ')
+          echo "New posts: $NEW"
+          echo "files=$NEW" >> "$GITHUB_OUTPUT"
+      - name: cross-post
+        if: steps.new.outputs.files != ''
+        env:
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+          HASHNODE_API_KEY: ${{ secrets.HASHNODE_API_KEY }}
+          HASHNODE_PUBLICATION_ID: ${{ secrets.HASHNODE_PUBLICATION_ID }}
+          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+          X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+        run: |
+          for f in ${{ steps.new.outputs.files }}; do
+            node .github/scripts/syndicate.mjs "$f"
+          done
+      - name: persist rotated X refresh token
+        # X invalidates the old refresh token on every refresh; without this
+        # write-back the next syndicate run cannot authenticate to X.
+        if: always() && hashFiles('.x-refresh-token') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_SECRETS_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::X refresh token was rotated but GH_SECRETS_PAT is not set — set it (fine-grained PAT with repo Secrets write) and re-mint the X refresh token, or the next run's X publish will fail."
+            exit 1
+          fi
+          gh secret set X_REFRESH_TOKEN --body "$(cat .x-refresh-token)"
+          rm -f .x-refresh-token .x-access-token

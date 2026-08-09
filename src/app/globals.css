@@ -1,26 +1,148 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+  --font-heading: var(--font-sans);
+  --color-diff-add: var(--diff-add);
+  --color-diff-add-foreground: var(--diff-add-foreground);
+  --color-diff-del: var(--diff-del);
+  --color-diff-del-foreground: var(--diff-del-foreground);
+  --color-tag-rant: var(--tag-rant);
+  --color-tag-perf: var(--tag-perf);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* GitHub-PR-on-paper palette from claude-design-content/option-b-diff.dc.html */
+:root {
+  --background: #fbfaf7;
+  --foreground: #1a1d21;
+  --card: #ffffff;
+  --card-foreground: #1a1d21;
+  --popover: #ffffff;
+  --popover-foreground: #1a1d21;
+  --primary: #1a7f37;
+  --primary-foreground: #fbfaf7;
+  --secondary: #eef1f4;
+  --secondary-foreground: #1a1d21;
+  --muted: #eef1f4;
+  --muted-foreground: #57606a;
+  --accent: #e6f7eb;
+  --accent-foreground: #0d5324;
+  --destructive: #cf222e;
+  --border: #d5d9de;
+  --input: #d5d9de;
+  --ring: #1a7f37;
+  --chart-1: #1a7f37;
+  --chart-2: #cf222e;
+  --chart-3: #8250df;
+  --chart-4: #57606a;
+  --chart-5: #d5d9de;
+  --radius: 0.375rem;
+  --sidebar: #eef1f4;
+  --sidebar-foreground: #1a1d21;
+  --sidebar-primary: #1a7f37;
+  --sidebar-primary-foreground: #fbfaf7;
+  --sidebar-accent: #e6f7eb;
+  --sidebar-accent-foreground: #0d5324;
+  --sidebar-border: #d5d9de;
+  --sidebar-ring: #1a7f37;
+  --diff-add: #e6f7eb;
+  --diff-add-foreground: #0d5324;
+  --diff-del: #ffece9;
+  --diff-del-foreground: #82071e;
+  --tag-rant: #cf222e;
+  --tag-perf: #8250df;
+}
+
+/* ponytail: light-only design (per the mock) — re-add a .dark token block if a theme toggle ever ships */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  ::selection {
+    background: #d2f4dc;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Shiki code views: grid rows per line, CSS-counter line numbers, diff row tints */
+.code-view pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+.code-view code {
+  display: grid;
+  min-width: max-content;
+  counter-reset: line;
+  font-family: var(--font-plex-mono), monospace;
+  line-height: 1.7;
+}
+.code-view .line {
+  padding-inline: 14px;
+  counter-increment: line;
+}
+.code-view .line::before {
+  content: counter(line);
+  display: inline-block;
+  width: 2.5ch;
+  margin-right: 16px;
+  text-align: right;
+  color: color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+  user-select: none;
+}
+.code-view .line.diff-add {
+  background: var(--diff-add);
+}
+.code-view .line.diff-del {
+  background: var(--diff-del);
 }
