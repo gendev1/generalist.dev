@@ -5,7 +5,7 @@
 A personal blog cosplaying as a GitHub pull request. Posts are commits. The bio
 is a diff. Publishing is a merge to `main` — literally: CI stamps each post
 with the sha of the commit that added it, links it back to this repo, deploys
-the site, and cross-posts the article to dev.to, Hashnode, and X. The footer
+the site, and cross-posts the article to dev.to and X. The footer
 is not a joke, it's the architecture: **Reviewed by me. Typed by agents.**
 
 ## The conceit, end to end
@@ -16,7 +16,7 @@ flowchart LR
     B --> C["ci: lint · typecheck · build"]
     C --> D["record-hashes:<br/>add-commit sha → commits.json"]
     D --> E["deploy (Vercel)"]
-    B --> F["syndicate:<br/>dev.to · hashnode · x"]
+    B --> F["syndicate:<br/>dev.to · x"]
     E --> G["site shows sha,<br/>linked to the real commit"]
 ```
 
@@ -74,8 +74,8 @@ Two workflows:
 **[`syndicate.yml`](.github/workflows/syndicate.yml)** — on pushes to `main`
 that add files under `content/blog/`:
 
-- **dev.to** — full markdown, `canonical_url` → this site (SEO stays home)
-- **Hashnode** — `publishPost` mutation, `originalArticleURL` canonical
+- **dev.to** — full markdown, `canonical_url` → this site (SEO stays home);
+  re-runs update the existing article in place instead of double-posting
 - **X** — markdown converted to DraftJS blocks, published via the Articles API
   (draft → publish). OAuth 2.0: a fresh access token is minted per run from the
   refresh token, and because X *rotates* refresh tokens on use, the workflow
@@ -90,7 +90,6 @@ enabled one at a time.
 |---|---|---|
 | `VERCEL_TOKEN` `VERCEL_ORG_ID` `VERCEL_PROJECT_ID` | deploy | from Vercel account/`.vercel/project.json` |
 | `DEVTO_API_KEY` | dev.to | Settings → Extensions |
-| `HASHNODE_API_KEY` `HASHNODE_PUBLICATION_ID` | Hashnode | PAT + publication dashboard URL |
 | `X_CLIENT_ID` `X_CLIENT_SECRET` `X_REFRESH_TOKEN` | X | console.x.com app (confidential client). The refresh token is single-use — paste it once, never reuse it elsewhere |
 | `GH_SECRETS_PAT` | X token rotation | fine-grained PAT, this repo only, **Secrets: read/write**. `GITHUB_TOKEN` can push commits but can never write secrets |
 
@@ -124,7 +123,7 @@ src/
   lib/posts.ts        content loader (fs + gray-matter, build-time)
 .github/
   workflows/          ci.yml, syndicate.yml
-  scripts/            syndicate.mjs (dev.to / hashnode / x publisher)
+  scripts/            syndicate.mjs (dev.to / x publisher)
 .claude/skills/       write-post skill (the post contract)
 claude-design-content/  original design mocks the site was ported from
 ```

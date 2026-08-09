@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
     paths: ["content/blog/**.md"]
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "space-separated post paths to (re)syndicate, e.g. content/blog/my-post.md"
+        required: true
+        type: string
 
 jobs:
   crosspost:
@@ -20,15 +26,17 @@ jobs:
       - name: find newly added posts
         id: new
         run: |
-          NEW=$(git diff --name-only --diff-filter=A ${{ github.event.before }} ${{ github.sha }} -- 'content/blog/*.md' | tr '\n' ' ')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            NEW="${{ inputs.files }}"
+          else
+            NEW=$(git diff --name-only --diff-filter=A ${{ github.event.before }} ${{ github.sha }} -- 'content/blog/*.md' | tr '\n' ' ')
+          fi
           echo "New posts: $NEW"
           echo "files=$NEW" >> "$GITHUB_OUTPUT"
       - name: cross-post
         if: steps.new.outputs.files != ''
         env:
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
-          HASHNODE_API_KEY: ${{ secrets.HASHNODE_API_KEY }}
-          HASHNODE_PUBLICATION_ID: ${{ secrets.HASHNODE_PUBLICATION_ID }}
           X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
           X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
           X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}

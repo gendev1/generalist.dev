@@ -1,4 +1,4 @@
-// Cross-post a newly merged blog post to dev.to, Hashnode, and X.
+// Cross-post a newly merged blog post to dev.to and X.
 // Usage: node .github/scripts/syndicate.mjs content/blog/<slug>.md
 // Each platform is skipped (not failed) when its secrets are absent,
 // so platforms can be enabled one at a time.
@@ -6,7 +6,9 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 
-const SITE = "https://generalist.dev";
+// www is the canonical host — the apex 308-redirects to it, and dev.to's
+// image proxy does not follow redirects
+const SITE = "https://www.generalist.dev";
 
 const file = process.argv[2];
 if (!file) {
@@ -17,8 +19,8 @@ if (!file) {
 const { data, content: rawContent } = matter(fs.readFileSync(file, "utf8"));
 const slug = path.basename(file, ".md");
 const canonicalUrl = `${SITE}/blog/${slug}`;
-// Root-relative image/link paths resolve against dev.to/hashnode's domain and
-// 404 — rewrite them to absolute URLs before sending anywhere.
+// Root-relative image/link paths resolve against dev.to's domain and 404 —
+// rewrite them to absolute URLs before sending anywhere.
 const content = rawContent.replace(/\]\(\//g, `](${SITE}/`);
 
 function skip(platform, why) {
@@ -30,8 +32,49 @@ function fail(platform, detail) {
   process.exitCode = 1;
 }
 
+// APIs behind bot walls / redirects return HTML; parsing it as JSON must fail
+// with a diagnostic, not crash the whole run.
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `non-JSON response ${res.status} from ${res.url}: ${text.slice(0, 160)}`,
+    );
+  }
+}
+
 async function postToDevTo() {
   if (!process.env.DEVTO_API_KEY) return skip("dev.to", "no DEVTO_API_KEY");
+  // idempotency: a re-run after a partial failure must not double-post —
+  // update the existing article instead (also how content fixes propagate)
+  const mine = await fetch(
+    "https://dev.to/api/articles/me/published?per_page=1000",
+    { headers: { "api-key": process.env.DEVTO_API_KEY } },
+  );
+  if (mine.ok) {
+    const canonicals = [canonicalUrl, canonicalUrl.replace("://www.", "://")];
+    const existing = (await readJson(mine)).find((a) =>
+      canonicals.includes(a.canonical_url),
+    );
+    if (existing) {
+      const upd = await fetch(`https://dev.to/api/articles/${existing.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": process.env.DEVTO_API_KEY,
+        },
+        body: JSON.stringify({
+          article: { body_markdown: content, canonical_url: canonicalUrl },
+        }),
+      });
+      if (!upd.ok)
+        return fail("dev.to update", `${upd.status} ${await upd.text()}`);
+      console.log(`- dev.to: updated ${existing.url}`);
+      return;
+    }
+  }
   const res = await fetch("https://dev.to/api/articles", {
     method: "POST",
     headers: {
@@ -49,38 +92,8 @@ async function postToDevTo() {
     }),
   });
   if (!res.ok) return fail("dev.to", `${res.status} ${await res.text()}`);
-  const json = await res.json();
+  const json = await readJson(res);
   console.log(`- dev.to: ${json.url}`);
-}
-
-async function postToHashnode() {
-  if (!process.env.HASHNODE_API_KEY || !process.env.HASHNODE_PUBLICATION_ID)
-    return skip("hashnode", "no HASHNODE_API_KEY / HASHNODE_PUBLICATION_ID");
-  const res = await fetch("https://gql.hashnode.com", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: process.env.HASHNODE_API_KEY,
-    },
-    body: JSON.stringify({
-      query: `mutation PublishPost($input: PublishPostInput!) {
-        publishPost(input: $input) { post { url } }
-      }`,
-      variables: {
-        input: {
-          publicationId: process.env.HASHNODE_PUBLICATION_ID,
-          title: data.title,
-          subtitle: data.summary,
-          contentMarkdown: content,
-          originalArticleURL: canonicalUrl,
-        },
-      },
-    }),
-  });
-  const json = await res.json();
-  if (!res.ok || json.errors)
-    return fail("hashnode", JSON.stringify(json.errors ?? res.status));
-  console.log(`- hashnode: ${json.data.publishPost.post.url}`);
 }
 
 // X Articles API (POST /2/articles/draft + /2/articles/{id}/publish) takes a
@@ -182,7 +195,7 @@ async function xAccessToken(env) {
   });
   if (!res.ok)
     throw new Error(`token refresh: ${res.status} ${await res.text()}`);
-  const json = await res.json();
+  const json = await readJson(res);
   if (json.refresh_token)
     fs.writeFileSync(".x-refresh-token", json.refresh_token);
   fs.writeFileSync(".x-access-token", json.access_token);
@@ -215,7 +228,7 @@ async function postToX() {
   });
   if (!draftRes.ok)
     return fail("x draft", `${draftRes.status} ${await draftRes.text()}`);
-  const draft = await draftRes.json();
+  const draft = await readJson(draftRes);
 
   const pubRes = await fetch(
     `https://api.x.com/2/articles/${draft.data.id}/publish`,
@@ -226,13 +239,22 @@ async function postToX() {
   );
   if (!pubRes.ok)
     return fail("x publish", `${pubRes.status} ${await pubRes.text()}`);
-  const pub = await pubRes.json();
+  const pub = await readJson(pubRes);
   console.log(
     `- x: article ${draft.data.id} published as post ${pub.data?.post_id}`,
   );
 }
 
 console.log(`syndicating ${slug} (canonical: ${canonicalUrl})`);
-await postToDevTo();
-await postToHashnode();
-await postToX();
+// one platform blowing up must not stop the others (or crash before the
+// rotated X refresh token gets written back)
+for (const [name, post] of [
+  ["dev.to", postToDevTo],
+  ["x", postToX],
+]) {
+  try {
+    await post();
+  } catch (error) {
+    fail(name, error.message);
+  }
+}

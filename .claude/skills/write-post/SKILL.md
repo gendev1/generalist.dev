@@ -62,8 +62,8 @@ a public engineering blog would.
 
 Merging to main triggers CI: the post's add-commit sha lands in
 `content/commits.json` (site shows it, linked to the GitHub commit), the site
-deploys, and the post auto-publishes to dev.to and Hashnode (full markdown,
-canonical URL back to the site) and X (as an Article via converted blocks).
+deploys, and the post auto-publishes to dev.to (full markdown, canonical URL
+back to the site) and X (as an Article via converted blocks).
 Publishing is not part of writing a post — never run those steps manually.
 
 ## Before finishing
