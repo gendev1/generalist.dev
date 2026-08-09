@@ -20,7 +20,7 @@ And it's not one guy's timeline. Boris Cherny, who leads Claude Code, says the s
 
 The ladder keeps extending: prompt, context, harness, loop, graph. Whatever rung you're standing on, someone is already selling the next one — and every rung lives on the same side of the diagram:
 
-![The discourse ladder: prompt, context, loop, graph engineering — all on the write path, ending at "code exists… and then what?"](/images/after-the-loop/diagram-ladder.png "fig 1 · the discourse ladder, all of it on the write path")
+![The discourse ladder: prompt, context, loop, graph engineering — all on the write path, ending at "code exists… and then what?"](/images/after-the-loop/diagram-ladder.png?v=1 "fig 1 · the discourse ladder, all of it on the write path")
 
 I've been on this treadmill too, and this isn't a takedown. Specs did their job — a fine primitive. Loops and graphs are fine primitives too. But look at what every rung of the ladder has in common: it's all machinery for *producing* code. Then I ran a real verification pass over the output of my own factory, and came out believing the execution topology is the least interesting part of the problem. Almost nobody is working on what happens after the code exists.
 
@@ -108,7 +108,7 @@ When an agent writes the code and its tests in the same loop iteration, the test
 
 Side by side, the two shapes:
 
-![Self-grading: agent writes code, writes tests from that code, suite goes green, merge. Oracle-derived: spec transcribed independently, corpus of expected outputs, diffed against the implementation](/images/after-the-loop/diagram-selfgrading.png "fig 4 · self-grading tests vs an independent oracle")
+![Self-grading: agent writes code, writes tests from that code, suite goes green, merge. Oracle-derived: spec transcribed independently, corpus of expected outputs, diffed against the implementation](/images/after-the-loop/diagram-selfgrading.png?v=1 "fig 4 · self-grading tests vs an independent oracle")
 
 These three controls are not interchangeable:
 
@@ -124,7 +124,7 @@ An oracle without mutation testing can be guarded by a suite too weak to localiz
 
 MVP → derive oracles from the primary source → development gated by mutation score → CI review that diffs against the oracle, with comprehension brakes between the gates:
 
-![The outer loop: MVP, derive oracles, agents develop, mutation gate loops survivors back, comprehension brake halts until a human can explain the change, CI review diffs against the oracle, merge](/images/after-the-loop/diagram-outerloop.png "fig 5 · the outer loop with verification gates")
+![The outer loop: MVP, derive oracles, agents develop, mutation gate loops survivors back, comprehension brake halts until a human can explain the change, CI review diffs against the oracle, merge](/images/after-the-loop/diagram-outerloop.png?v=1 "fig 5 · the outer loop with verification gates")
 
 Not every package needs a 2,300-case oracle or a perfect mutation score. Start where being wrong is expensive: calculations, permissions, state transitions, money movement, destructive operations. Freeze a small independent corpus. Mutate the decisions on those paths. At each milestone, make the operator trace one of them end to end. Expand the verified surface when production risk justifies it.
 

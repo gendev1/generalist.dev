@@ -10,6 +10,11 @@ on:
         description: "space-separated post paths to (re)syndicate, e.g. content/blog/my-post.md"
         required: true
         type: string
+      platforms:
+        description: "comma-separated platforms to run (devto,x) — use to avoid re-posting to X, which has no update API"
+        required: false
+        default: "devto,x"
+        type: string
 
 jobs:
   crosspost:
@@ -36,6 +41,7 @@ jobs:
       - name: cross-post
         if: steps.new.outputs.files != ''
         env:
+          PLATFORMS: ${{ inputs.platforms || 'devto,x' }}
           DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
           X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
           X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}

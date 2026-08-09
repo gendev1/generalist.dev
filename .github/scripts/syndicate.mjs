@@ -247,13 +247,45 @@ async function postToX() {
   );
 }
 
+// Syndication races the Vercel deploy (separate workflow). If a platform's
+// image proxy fetches an asset before it's live, it caches the 404 — so wait
+// until every referenced image is actually being served.
+async function waitForAssets(timeoutMs = 5 * 60 * 1000) {
+  const urls = [
+    canonicalUrl,
+    ...[...content.matchAll(/!\[[^\]]*\]\((\S+?)(?:\s+"[^"]*")?\)/g)].map(
+      (m) => m[1],
+    ),
+  ];
+  const deadline = Date.now() + timeoutMs;
+  for (const url of urls) {
+    for (;;) {
+      const res = await fetch(url, { method: "HEAD" });
+      if (res.ok) break;
+      if (Date.now() > deadline)
+        throw new Error(`asset never came up: ${url} (${res.status})`);
+      console.log(`  waiting for ${url} (${res.status})…`);
+      await new Promise((r) => setTimeout(r, 15000));
+    }
+  }
+}
+
 console.log(`syndicating ${slug} (canonical: ${canonicalUrl})`);
+await waitForAssets().catch((e) => {
+  fail("assets", e.message);
+  process.exit(1);
+});
 // one platform blowing up must not stop the others (or crash before the
 // rotated X refresh token gets written back)
-for (const [name, post] of [
-  ["dev.to", postToDevTo],
-  ["x", postToX],
+const platforms = (process.env.PLATFORMS ?? "devto,x").split(",");
+for (const [key, name, post] of [
+  ["devto", "dev.to", postToDevTo],
+  ["x", "x", postToX],
 ]) {
+  if (!platforms.includes(key)) {
+    skip(name, `not in PLATFORMS=${process.env.PLATFORMS}`);
+    continue;
+  }
   try {
     await post();
   } catch (error) {
