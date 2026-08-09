@@ -97,9 +97,11 @@ async function postToDevTo() {
 }
 
 // X Articles API (POST /2/articles/draft + /2/articles/{id}/publish) takes a
-// DraftJS content_state, not markdown — flatten markdown into typed blocks.
-// ponytail: inline styles/links are flattened to plain text; entities [] until
-// something needs real rich text.
+// DraftJS content_state, not markdown. Text becomes typed blocks; images
+// become atomic blocks with image entities (media uploaded first); code
+// fences and GFM tables become atomic blocks with markdown entities (the
+// Articles backend renders those natively). Inline styles/links in plain
+// text are still flattened.
 function stripInline(s) {
   return s
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
@@ -108,8 +110,43 @@ function stripInline(s) {
     .replace(/`([^`]+)`/g, "$1");
 }
 
-function mdToContentState(md) {
+async function uploadImageToX(url, token) {
+  const imgRes = await fetch(url);
+  if (!imgRes.ok) throw new Error(`fetch image ${url}: ${imgRes.status}`);
+  const form = new FormData();
+  form.append(
+    "media",
+    new Blob([Buffer.from(await imgRes.arrayBuffer())]),
+    url.split("/").pop().split("?")[0],
+  );
+  form.append("media_category", "tweet_image");
+  const res = await fetch("https://api.x.com/2/media/upload", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const json = await readJson(res);
+  const mediaId = json.data?.id ?? json.data?.media_id ?? json.media_id_string;
+  if (!res.ok || !mediaId)
+    throw new Error(`media upload ${res.status}: ${JSON.stringify(json)}`);
+  return String(mediaId);
+}
+
+async function mdToContentState(md, token) {
   const blocks = [];
+  const entities = [];
+  const media = []; // uploaded media_ids in order, [0] doubles as the cover
+  const addAtomic = (value) => {
+    const key = entities.length;
+    entities.push({ key: String(key), value });
+    blocks.push({
+      text: " ",
+      type: "atomic",
+      entity_ranges: [{ key, offset: 0, length: 1 }],
+    });
+  };
+  const addMarkdown = (markdown) =>
+    addAtomic({ type: "markdown", mutability: "mutable", data: { markdown } });
   const lines = md.split("\n");
   let paragraph = [];
   const flush = () => {
@@ -122,13 +159,37 @@ function mdToContentState(md) {
     const line = lines[i];
     if (line.startsWith("```")) {
       flush();
-      const code = [];
+      const code = [line];
       i++;
       while (i < lines.length && !lines[i].startsWith("```"))
         code.push(lines[i++]);
-      // X's Articles enum has no code type (only unstyled/header-*/list/
-      // blockquote/atomic) — blockquote is the closest visual offset
-      blocks.push({ text: code.join("\n"), type: "blockquote" });
+      code.push("```");
+      addMarkdown(code.join("\n"));
+      continue;
+    }
+    // an image line (plain or link-wrapped): upload and embed as an image
+    // entity; the title ("caption") or alt text becomes the caption
+    const img = line.match(/^\[?!\[([^\]]*)\]\((\S+?)(?:\s+"([^"]*)")?\)/);
+    if (img) {
+      flush();
+      const [, alt, url, title] = img;
+      const mediaId = await uploadImageToX(url, token);
+      media.push(mediaId);
+      const data = {
+        media_items: [{ media_id: mediaId, media_category: "tweet_image" }],
+      };
+      const caption = title || alt;
+      if (caption) data.caption = caption;
+      addAtomic({ type: "image", mutability: "immutable", data });
+      continue;
+    }
+    // GFM table: hand the whole thing to a markdown entity
+    if (/^\s*\|/.test(line)) {
+      flush();
+      const table = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) table.push(lines[i++]);
+      i--;
+      addMarkdown(table.join("\n"));
       continue;
     }
     const heading = line.match(/^(#{1,6}) (.*)/);
@@ -167,7 +228,7 @@ function mdToContentState(md) {
     paragraph.push(stripInline(line));
   }
   flush();
-  return { blocks, entities: [] };
+  return { contentState: { blocks, entities }, media };
 }
 
 // OAuth 2.0 with a confidential client. Access tokens live ~2h, so every run
@@ -214,11 +275,17 @@ async function postToX() {
   } catch (error) {
     return fail("x", error.message);
   }
-  const contentState = mdToContentState(content);
+  const { contentState, media } = await mdToContentState(content, token);
   contentState.blocks.push({
     text: `Originally published at ${canonicalUrl}`,
     type: "unstyled",
   });
+  const draftBody = { title: data.title, content_state: contentState };
+  if (media.length)
+    draftBody.cover_media = {
+      media_id: media[0],
+      media_category: "tweet_image",
+    };
 
   const draftRes = await fetch("https://api.x.com/2/articles/draft", {
     method: "POST",
@@ -226,7 +293,7 @@ async function postToX() {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ title: data.title, content_state: contentState }),
+    body: JSON.stringify(draftBody),
   });
   if (!draftRes.ok)
     return fail("x draft", `${draftRes.status} ${await draftRes.text()}`);
