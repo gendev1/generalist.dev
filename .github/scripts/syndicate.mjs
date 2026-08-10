@@ -187,7 +187,8 @@ async function mdToContentState(md, token) {
     if (/^\s*\|/.test(line)) {
       flush();
       const table = [];
-      while (i < lines.length && /^\s*\|/.test(lines[i])) table.push(lines[i++]);
+      while (i < lines.length && /^\s*\|/.test(lines[i]))
+        table.push(lines[i++]);
       i--;
       addMarkdown(table.join("\n"));
       continue;

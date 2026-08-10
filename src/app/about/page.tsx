@@ -130,7 +130,7 @@ export default function AboutPage() {
             <p className="mt-3">
               The robot is meant to map its home, learn which of its behaviors
               get a reaction, and play with Bunny, a friend&apos;s Bichon Frise
-              I ended up loving enough that I may have brainwashed her owner
+              I ended up loving enough that I may have brainwashed his owner
               into moving closer to me.
             </p>
             <p className="mt-3 text-muted-foreground">
